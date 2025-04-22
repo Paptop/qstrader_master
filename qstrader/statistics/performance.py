@@ -25,6 +25,19 @@ def aggregate_returns(returns, convert_to):
     else:
         ValueError('convert_to must be weekly, monthly or yearly')
 
+def create_profit_factor(returns):
+    # Separate positive and negative returns
+    positive_returns = returns[returns > 0].sum()
+    negative_returns = returns[returns < 0].sum()
+
+    # Compute profit factor
+    # Use abs for losses because it's a negative number
+    if abs(negative_returns) > 0:
+        profit_factor = positive_returns / abs(negative_returns)
+    else:
+        profit_factor = float('inf')  # No losses = infinite profit factor
+
+    return profit_factor
 
 def create_cagr(equity, periods=252):
     """

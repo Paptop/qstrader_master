@@ -269,7 +269,7 @@ class CSVDailyBarDataSource(object):
         close_series = []
         for asset in assets:
             if asset in self.asset_bar_frames.keys():
-                asset_close_prices = self.asset_bar_frames[asset][['Close']]
+                asset_close_prices = self.asset_bar_frames[asset][['Adj Close']]
                 asset_close_prices.columns = [asset]
                 close_series.append(asset_close_prices)
 

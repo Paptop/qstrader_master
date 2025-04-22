@@ -285,7 +285,7 @@ class BacktestTradingSession(TradingSession):
                 self.portfolio_id,
                 self.data_handler,
                 self.alpha_model,
-                self.risk_model,
+                risk_model=self.risk_model,
                 long_only=self.long_only,
                 cash_buffer_percentage=cash_buffer_percentage,
                 submit_orders=True

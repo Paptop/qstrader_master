@@ -53,6 +53,7 @@ class TearsheetStatistics(Statistics):
         statistics["equity"] = equity_df["Equity"]
         statistics["returns"] = equity_df["returns"]
         statistics["cum_returns"] = equity_df["cum_returns"]
+        statistics["profit_factor"] = perf.create_profit_factor(equity_df["returns"])
         return statistics
 
     def _plot_equity(self, strat_stats, bench_stats=None, ax=None, **kwargs):
@@ -178,6 +179,29 @@ class TearsheetStatistics(Statistics):
         ax.xaxis.grid(False)
 
         return ax
+    
+    def get_primary_results(self, stats, strategy_name):
+        returns = stats["returns"]
+        cum_returns = stats['cum_returns']
+        tot_ret = cum_returns.iloc[-1] - 1.0
+        cagr = perf.create_cagr(cum_returns, self.periods)
+        sharpe = perf.create_sharpe_ratio(returns, self.periods)
+        sortino = perf.create_sortino_ratio(returns, self.periods)
+        dd, dd_max, dd_dur = perf.create_drawdowns(cum_returns)
+        profit_factor = perf.create_profit_factor(returns)
+
+        return {
+            "Strategy": strategy_name,
+            "TotalReturns": tot_ret,
+            "ProfitFactor": profit_factor,
+            "CAGR": cagr,
+            "Sharpe": sharpe,
+            "Sortino": sortino,
+            "MeanDailyDrawdown": dd.mean(),
+            "AnnualVolatility": returns.std() * np.sqrt(252),
+            "MaxDailyDrawdown": dd_max,
+            "MaxDrawdownDurationDays": dd_max
+        }
 
     def _plot_txt_curve(self, stats, bench_stats=None, ax=None, **kwargs):
         """
@@ -200,6 +224,7 @@ class TearsheetStatistics(Statistics):
         sharpe = perf.create_sharpe_ratio(returns, self.periods)
         sortino = perf.create_sortino_ratio(returns, self.periods)
         dd, dd_max, dd_dur = perf.create_drawdowns(cum_returns)
+        profit_factor = perf.create_profit_factor(returns)
 
         # Benchmark statistics
         if bench_stats is not None:
@@ -210,6 +235,7 @@ class TearsheetStatistics(Statistics):
             bench_sharpe = perf.create_sharpe_ratio(bench_returns, self.periods)
             bench_sortino = perf.create_sortino_ratio(bench_returns, self.periods)
             bench_dd, bench_dd_max, bench_dd_dur = perf.create_drawdowns(bench_cum_returns)
+            bench_profit_factor = perf.create_profit_factor(bench_returns)
 
         # Strategy Values
         ax.text(7.50, 8.2, 'Strategy', fontweight='bold', horizontalalignment='right', fontsize=8, color='green')
@@ -217,34 +243,38 @@ class TearsheetStatistics(Statistics):
         ax.text(0.25, 6.9, 'Total Return', fontsize=8)
         ax.text(7.50, 6.9, '{:.0%}'.format(tot_ret), fontweight='bold', horizontalalignment='right', fontsize=8)
 
-        ax.text(0.25, 5.9, 'CAGR', fontsize=8)
-        ax.text(7.50, 5.9, '{:.2%}'.format(cagr), fontweight='bold', horizontalalignment='right', fontsize=8)
+        ax.text(0.25, 5.9, 'Profit Factor', fontsize=8)
+        ax.text(7.50, 5.9, '{:.3f}'.format(profit_factor), fontweight='bold', horizontalalignment='right', fontsize=8)
 
-        ax.text(0.25, 4.9, 'Sharpe Ratio', fontsize=8)
-        ax.text(7.50, 4.9, '{:.2f}'.format(sharpe), fontweight='bold', horizontalalignment='right', fontsize=8)
+        ax.text(0.25, 4.9, 'CAGR', fontsize=8)
+        ax.text(7.50, 4.9, '{:.2%}'.format(cagr), fontweight='bold', horizontalalignment='right', fontsize=8)
 
-        ax.text(0.25, 3.9, 'Sortino Ratio', fontsize=8)
-        ax.text(7.50, 3.9, '{:.2f}'.format(sortino), fontweight='bold', horizontalalignment='right', fontsize=8)
+        ax.text(0.25, 3.9, 'Sharpe Ratio', fontsize=8)
+        ax.text(7.50, 3.9, '{:.2f}'.format(sharpe), fontweight='bold', horizontalalignment='right', fontsize=8)
 
-        ax.text(0.25, 2.9, 'Annual Volatility', fontsize=8)
-        ax.text(7.50, 2.9, '{:.2%}'.format(returns.std() * np.sqrt(252)), fontweight='bold', horizontalalignment='right', fontsize=8)
+        ax.text(0.25, 2.9, 'Sortino Ratio', fontsize=8)
+        ax.text(7.50, 2.9, '{:.2f}'.format(sortino), fontweight='bold', horizontalalignment='right', fontsize=8)
 
-        ax.text(0.25, 1.9, 'Max Daily Drawdown', fontsize=8)
-        ax.text(7.50, 1.9, '{:.2%}'.format(dd_max), color='red', fontweight='bold', horizontalalignment='right', fontsize=8)
+        ax.text(0.25, 1.9, 'Annual Volatility', fontsize=8)
+        ax.text(7.50, 1.9, '{:.2%}'.format(returns.std() * np.sqrt(252)), fontweight='bold', horizontalalignment='right', fontsize=8)
 
-        ax.text(0.25, 0.9, 'Max Drawdown Duration (Days)', fontsize=8)
-        ax.text(7.50, 0.9, '{:.0f}'.format(dd_dur), fontweight='bold', horizontalalignment='right', fontsize=8)
+        ax.text(0.25, 0.9, 'Max Daily Drawdown', fontsize=8)
+        ax.text(7.50, 0.9, '{:.2%}'.format(dd_max), color='red', fontweight='bold', horizontalalignment='right', fontsize=8)
+
+        ax.text(0.25, -0.9, 'Max Drawdown Duration (Days)', fontsize=8)
+        ax.text(7.50, -0.9, '{:.0f}'.format(dd_dur), fontweight='bold', horizontalalignment='right', fontsize=8)
 
         # Benchmark Values
         if bench_stats is not None:
             ax.text(10.0, 8.2, 'Benchmark', fontweight='bold', horizontalalignment='right', fontsize=8, color='gray')
             ax.text(10.0, 6.9, '{:.0%}'.format(bench_tot_ret), fontweight='bold', horizontalalignment='right', fontsize=8)
-            ax.text(10.0, 5.9, '{:.2%}'.format(bench_cagr), fontweight='bold', horizontalalignment='right', fontsize=8)
-            ax.text(10.0, 4.9, '{:.2f}'.format(bench_sharpe), fontweight='bold', horizontalalignment='right', fontsize=8)
-            ax.text(10.0, 3.9, '{:.2f}'.format(bench_sortino), fontweight='bold', horizontalalignment='right', fontsize=8)
-            ax.text(10.0, 2.9, '{:.2%}'.format(bench_returns.std() * np.sqrt(252)), fontweight='bold', horizontalalignment='right', fontsize=8)
-            ax.text(10.0, 1.9, '{:.2%}'.format(bench_dd_max), color='red', fontweight='bold', horizontalalignment='right', fontsize=8)
-            ax.text(10.0, 0.9, '{:.0f}'.format(bench_dd_dur), fontweight='bold', horizontalalignment='right', fontsize=8)
+            ax.text(10.0, 5.9, '{:.3f}'.format(bench_profit_factor), fontweight='bold', horizontalalignment='right', fontsize=8)
+            ax.text(10.0, 4.9, '{:.2%}'.format(bench_cagr), fontweight='bold', horizontalalignment='right', fontsize=8)
+            ax.text(10.0, 3.9, '{:.2f}'.format(bench_sharpe), fontweight='bold', horizontalalignment='right', fontsize=8)
+            ax.text(10.0, 2.9, '{:.2f}'.format(bench_sortino), fontweight='bold', horizontalalignment='right', fontsize=8)
+            ax.text(10.0, 1.9, '{:.2%}'.format(bench_returns.std() * np.sqrt(252)), fontweight='bold', horizontalalignment='right', fontsize=8)
+            ax.text(10.0, 0.9, '{:.2%}'.format(bench_dd_max), color='red', fontweight='bold', horizontalalignment='right', fontsize=8)
+            ax.text(10.0, -0.9, '{:.0f}'.format(bench_dd_dur), fontweight='bold', horizontalalignment='right', fontsize=8)
 
         ax.set_title('Equity Curve', fontweight='bold')
 

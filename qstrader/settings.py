@@ -11,7 +11,7 @@ LOGGING = {
     'DATE_FORMAT': '%Y-%m-%d %H:%M:%S'
 }
 
-PRINT_EVENTS = True
+PRINT_EVENTS = False
 
 
 def set_print_events(print_events=True):
