@@ -8,7 +8,7 @@ class KamaModel(AlphaModel):
         universe,
         data_handler,
         period,
-        prices
+        #prices
     ):
         self.signals = signals
         self.universe = universe
@@ -16,8 +16,8 @@ class KamaModel(AlphaModel):
         self.weights = None
         self.isSelfInvested = False
         self.period = period
-        self.prices = prices
-        self.prices.index = pd.to_datetime(self.prices.index)
+        #self.prices = prices
+        #self.prices.index = pd.to_datetime(self.prices.index)
 
     def get_description(self):
         return {
@@ -51,8 +51,9 @@ class KamaModel(AlphaModel):
             return self.weights
         
         kama_value = self.signals['kama'](assets[0], self.period)
+        close_price_sp = self.signals['current_price'](assets[0], 1)[0]
         dd = dt.date()
-        current_price = self.get_last_existing_price(dd)
+        current_price = close_price_sp #self.get_last_existing_price(dd)
 
         # 3) Compare price to KAMA to decide weighting
         if current_price > kama_value:

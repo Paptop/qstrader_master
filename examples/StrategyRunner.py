@@ -3,9 +3,11 @@
 from datetime import datetime
 import json
 import os
+from examples.alpha_models.RsiModel import RSIBasedAlphaModel
 from examples.alpha_models.CrossCustomMovingAverage import CrossCustomMovingAverage
 from examples.alpha_models.CrossWeightedMovingAverage import CrossWMovingAverage
 from examples.alpha_models.CrossExponentialMovingAverage import CrossExponentialMovingAverage
+from examples.alpha_models.KamaModel import KamaModel
 from examples.alpha_models.SimpleCrossMovingAverage import SimpleCrossMovingAverage
 from examples.factories.StategyFactory import StrategyFactory
 from qstrader.alpha_model.fixed_signals import FixedSignalsAlphaModel
@@ -16,6 +18,8 @@ from qstrader.data.backtest_data_handler import BacktestDataHandler
 from qstrader.data.daily_bar_csv import CSVDailyBarDataSource
 from qstrader.signals.current_price import CurrentPriceSignal
 from qstrader.signals.ema import EMASignal
+from qstrader.signals.kama import KaufmanAdaptiveMASignal
+from qstrader.signals.rsi import RSISignal
 from qstrader.signals.signals_collection import SignalsCollection
 from qstrader.signals.sma import SMASignal
 from qstrader.signals.wma import WMASignal
@@ -29,7 +33,9 @@ class StrategyRunner:
             start_dt,
             end_dt,
             symbols,
-            name
+            name,
+            show_plot = False,
+            run_benchmark = False
         ):
         self.output_folder = "Results"
         self.name = name
@@ -46,6 +52,10 @@ class StrategyRunner:
         self.csv_dir = os.environ.get('QSTRADER_CSV_DATA_DIR', '.')
         self.strategy_data_source = CSVDailyBarDataSource(self.csv_dir, Equity, csv_symbols=symbols)
         self.strategy_data_handler = BacktestDataHandler(self.strategy_universe, data_sources=[self.strategy_data_source])
+
+        # Params
+        self.show_plot = show_plot
+        self.run_benchmark = run_benchmark
 
     def get_strategy_factory(self, signals=None):
         return StrategyFactory(signals, self.strategy_universe, self.strategy_data_handler)
@@ -145,6 +155,53 @@ class StrategyRunner:
             stat_path,
             desc_path
         )
+    
+    def execute_kama(self, fast_period=2, slow_period=30, er_period=10, kama_period=60, rebalance_freq="end_of_month", risk_model=None):
+        plot_path, stat_path, desc_path = self._get_info_paths()
+        kama = kama = KaufmanAdaptiveMASignal(self.start_dt, self.strategy_universe, lookbacks=[kama_period], fast_period=fast_period, slow_period=slow_period, er_period=er_period)
+        current_price = CurrentPriceSignal(self.start_dt, self.strategy_universe, lookbacks=[0,1,2])
+        signals = SignalsCollection({'kama': kama, 'current_price': current_price}, self.strategy_data_handler)
+
+        alpha_model = KamaModel(
+            signals,
+            self.strategy_universe,
+            self.strategy_data_handler,
+            kama_period
+        )
+        
+        return self._execute_strategy(
+            alpha_model,
+            risk_model,
+            signals,
+            rebalance_freq,
+            plot_path,
+            stat_path,
+            desc_path
+        )
+    
+    def execute_rsi(self, rsi_period=14, rsi_upper=70, rsi_lower=30, rebalance_freq="end_of_month", risk_model=None):
+        plot_path, stat_path, desc_path = self._get_info_paths()
+        rsi = RSISignal(self.start_dt, self.strategy_universe, lookbacks=[rsi_period])
+        signals = SignalsCollection({'rsi': rsi}, self.strategy_data_handler)
+
+        alpha_model = RSIBasedAlphaModel(
+            signals,
+            self.strategy_universe,
+            self.strategy_data_handler,
+            rsi_period = rsi_period,
+            rsi_upper=rsi_upper,
+            rsi_lower=rsi_lower
+        )
+        
+        return self._execute_strategy(
+            alpha_model,
+            risk_model,
+            signals,
+            rebalance_freq,
+            plot_path,
+            stat_path,
+            desc_path
+        )
 
     def _execute_strategy(self, alpha_model, risk_model, signals, rebalance_freq, plot_path, stat_path, desc_path):
         backtest = BacktestTradingSession(
@@ -161,7 +218,10 @@ class StrategyRunner:
             rebalance_weekday='FRI'
         )
         backtest.run()
-        benchmark_equity_curve = self.benchmark_spy()
+
+        benchmark_equity_curve = None
+        if self.run_benchmark:
+            benchmark_equity_curve = self.benchmark_spy()
 
         results = self._save_statistics(
             backtest.get_equity_curve(),
@@ -220,7 +280,8 @@ class StrategyRunner:
             title=title
         )
 
-        #tearsheet.plot_results(filename=plot_path)
+        if self.show_plot:
+            tearsheet.plot_results(filename=plot_path)
 
         # Get backtest results
         backtest_result_stats = tearsheet.get_results(backtest_curve)
@@ -232,6 +293,7 @@ class StrategyRunner:
         backtest_stats['end_dt'] = str(self.end_dt)
 
         # Get benchmark results
+        bench_stats = None
         if benchmark_curve is not None:
             bench_stats = tearsheet.get_results(benchmark_curve)
             bench_stats = tearsheet.get_primary_results(bench_stats, title)
