@@ -189,7 +189,6 @@ class StrategyRunner:
         """
         Execute a Q-Learning-based alpha model strategy.
         """
-
         # Define signals
         short_sma = 8
         long_sma = 20
@@ -227,7 +226,7 @@ class StrategyRunner:
         performance_stats = pd.DataFrame(columns=[
             'Action', 'Returns', 'Sharpe', 'Profit Factor', 'Benchmark Returns', 'Reward'
         ])
-        performance_stats.index = pd.MultiIndex.from_tuples([], names=["Date", "Epoch"])
+        performance_stats.index = pd.MultiIndex.from_tuples([], names=["Date", "Epoch", "Training"])
         
         from examples.alpha_models.QLearningAlphaModel import QLearningAlphaModel
         alpha_model = QLearningAlphaModel(
@@ -244,6 +243,7 @@ class StrategyRunner:
         run_number = self._get_run_number()
         # Execute the strategy
         for e in range(epochs):
+            #alpha_model.load_model(self.name)
             plot_path, stat_path, desc_path = self._get_info_paths(prefix=f"Train_{e}")
 
             print("Starting epoch", e)
@@ -281,6 +281,7 @@ class StrategyRunner:
             print(results)
             performance_stats.to_csv("performance_stats_"+ run_number +".csv")
             print("--------------------------------")
+            alpha_model.save_model(self.name)
         self.plot_rewards_by_epoch(performance_stats)
 
 

@@ -362,7 +362,7 @@ class QLearningAlphaModel(AlphaModel):
         self.counter += 1
 
         # Update the performance_stats DataFrame
-        self.performance_stats.loc[(dt, self.epoch_number), :] = {
+        self.performance_stats.loc[(dt, self.epoch_number, not self.eval_mode), :] = {
             'Action': action_name,
             'Returns': round(cum_returns, 2),
             'Sharpe': round(stats_strategy['Sharpe'], 2),
