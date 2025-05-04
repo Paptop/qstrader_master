@@ -340,6 +340,10 @@ class BacktestTradingSession(TradingSession):
         `pd.DataFrame`
             The datetime-indexed equity curve of the strategy.
         """
+        if not self.equity_curve:
+            # Return an empty DataFrame if equity_curve is empty
+            return pd.DataFrame(columns=['Date', 'Equity']).set_index('Date')
+    
         equity_df = pd.DataFrame(
             self.equity_curve, columns=['Date', 'Equity']
         ).set_index('Date')
@@ -379,7 +383,7 @@ class BacktestTradingSession(TradingSession):
         if settings.PRINT_EVENTS:
             print("Beginning backtest simulation...")
 
-        stats = {'target_allocations': []}
+        stats = {'target_allocations': [], 'equity_curve': self.get_equity_curve()}
 
         for event in self.sim_engine:
             # Output the system event and timestamp
@@ -423,6 +427,7 @@ class BacktestTradingSession(TradingSession):
                         self._update_equity_curve(dt)
                 else:
                     self._update_equity_curve(dt)
+                stats['equity_curve'] = self.get_equity_curve()
 
         self.target_allocations = stats['target_allocations']
 

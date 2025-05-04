@@ -19,7 +19,7 @@ class AlphaModel(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def __call__(self, dt):
+    def __call__(self, dt, stats):
         raise NotImplementedError(
             "Should implement __call__()"
         )

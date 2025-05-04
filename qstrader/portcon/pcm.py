@@ -257,7 +257,7 @@ class PortfolioConstructionModel(object):
         # If an AlphaModel is provided use its suggestions, otherwise
         # create a null weight vector (zero for all Assets).
         if self.alpha_model:
-            weights = self.alpha_model(dt)
+            weights = self.alpha_model(dt, stats)
         else:
             weights = self._create_zero_target_weights_vector(dt)
 

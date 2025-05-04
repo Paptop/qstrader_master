@@ -3,6 +3,9 @@
 from datetime import datetime
 import json
 import os
+import matplotlib.pyplot as plt
+
+import pandas as pd
 from examples.alpha_models.RsiModel import RSIBasedAlphaModel
 from examples.alpha_models.CrossCustomMovingAverage import CrossCustomMovingAverage
 from examples.alpha_models.CrossWeightedMovingAverage import CrossWMovingAverage
@@ -60,7 +63,7 @@ class StrategyRunner:
     def get_strategy_factory(self, signals=None):
         return StrategyFactory(signals, self.strategy_universe, self.strategy_data_handler)
         
-    def execute_sma(self, short_window, long_window, rebalance_freq="end_of_month", risk_model=None):
+    def execute_sma(self, short_window=10, long_window=30, rebalance_freq="end_of_month", risk_model=None):
         plot_path, stat_path, desc_path = self._get_info_paths()
 
         sma = SMASignal(self.start_dt, self.strategy_universe, lookbacks=[short_window, long_window])
@@ -84,7 +87,7 @@ class StrategyRunner:
             desc_path
         )
     
-    def execute_ema(self, short_window, long_window, rebalance_freq="end_of_month", risk_model=None):
+    def execute_ema(self, short_window=10, long_window=30, rebalance_freq="end_of_month", risk_model=None):
         plot_path, stat_path, desc_path = self._get_info_paths()
         ema = EMASignal(self.start_dt, self.strategy_universe, lookbacks=[short_window, long_window])
         signals = SignalsCollection({'ema': ema}, self.strategy_data_handler)
@@ -107,7 +110,7 @@ class StrategyRunner:
             desc_path
         )
 
-    def execute_wma(self, short_window, long_window, rebalance_freq="end_of_month", risk_model=None):
+    def execute_wma(self, short_window=10, long_window=30, rebalance_freq="end_of_month", risk_model=None):
         plot_path, stat_path, desc_path = self._get_info_paths()
         wma = WMASignal(self.start_dt, self.strategy_universe, lookbacks=[short_window, long_window])
         signals = SignalsCollection({'wma': wma}, self.strategy_data_handler)
@@ -130,7 +133,158 @@ class StrategyRunner:
             desc_path
         )
     
-    def execute_custom_cma(self, short_window, long_window, rebalance_freq="end_of_month", risk_model=None):
+    def get_rewards_by_epoch(self, performance_stats):
+        """
+        Get the latest reward value for each epoch from the performance_stats DataFrame.
+
+        Parameters
+        ----------
+        performance_stats : pd.DataFrame
+            A DataFrame with a MultiIndex (Date, Epoch) and a 'Reward' column.
+
+        Returns
+        -------
+        pd.Series
+            A Series with the latest reward for each epoch.
+        """
+        # Group by the 'Epoch' level of the MultiIndex and get the last reward for each epoch
+        rewards_by_epoch = performance_stats.groupby(level='Epoch')['Reward'].last()
+
+        # Print the rewards for each epoch
+        print("Rewards by Epoch:")
+        print(rewards_by_epoch)
+
+
+    def plot_rewards_by_epoch(self, performance_stats):
+        """
+        Get the latest reward for each epoch from the performance_stats DataFrame
+        and plot it as a line chart.
+
+        Parameters
+        ----------
+        performance_stats : pd.DataFrame
+            A DataFrame with a MultiIndex (Date, Epoch) and a 'Reward' column.
+
+        Returns
+        -------
+        pd.Series
+            A Series with the latest reward for each epoch.
+        """
+        # Group by the 'Epoch' level of the MultiIndex and get the last reward for each epoch
+        rewards_by_epoch = performance_stats.groupby(level='Epoch')['Reward'].last()
+
+        # Plot the rewards as a line chart
+        plt.figure(figsize=(10, 6))
+        plt.plot(rewards_by_epoch.index, rewards_by_epoch.values, marker='o', linestyle='-', color='blue', label='Reward')
+        plt.title("Latest Reward by Epoch", fontsize=16)
+        plt.xlabel("Epoch", fontsize=14)
+        plt.ylabel("Reward", fontsize=14)
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        plt.xticks(rewards_by_epoch.index, rotation=45)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+    def execute_QLearning(self, epochs=200, learning_rate=0.001, discount_factor=0.9, exploration_rate=1.0, rebalance_freq="end_of_month", risk_model=None):
+        """
+        Execute a Q-Learning-based alpha model strategy.
+        """
+
+        # Define signals
+        short_sma = 8
+        long_sma = 20
+
+        short_wma = 12
+        long_wma = 32
+
+        long_ema = 10
+        short_ema = 40
+
+        kama_period = 365
+        rsi_period_long = 30
+        rsi_period_short = 13
+        
+        kama_period = 365
+        sma = SMASignal(self.start_dt, self.strategy_universe, lookbacks=[short_sma, long_sma])
+        wma = WMASignal(self.start_dt, self.strategy_universe, lookbacks=[short_wma, long_wma])
+        ema = EMASignal(self.start_dt, self.strategy_universe, lookbacks=[short_ema, long_ema])
+        rsi = RSISignal(self.start_dt, self.strategy_universe, lookbacks=[rsi_period_long, rsi_period_short])
+        current_price = CurrentPriceSignal(self.start_dt, self.strategy_universe, lookbacks=[0,1,2])
+        kama = KaufmanAdaptiveMASignal(self.start_dt, self.strategy_universe, lookbacks=[kama_period], fast_period=38, slow_period=39, er_period=100)
+        signals = SignalsCollection(
+        {
+            'sma': sma,
+            'wma': wma, 
+            'ema': ema,
+            'rsi': rsi,
+            'cur_price': current_price,
+            'kama': kama
+        },
+            self.strategy_data_handler)
+        
+        benchmark_curve = self.benchmark_spy(self.start_dt, self.end_dt)
+        # Initialize the Q-Learning Alpha Model
+        performance_stats = pd.DataFrame(columns=[
+            'Action', 'Returns', 'Sharpe', 'Profit Factor', 'Benchmark Returns', 'Reward'
+        ])
+        performance_stats.index = pd.MultiIndex.from_tuples([], names=["Date", "Epoch"])
+        
+        from examples.alpha_models.QLearningAlphaModel import QLearningAlphaModel
+        alpha_model = QLearningAlphaModel(
+            signals,
+            self.strategy_universe,
+            self.strategy_data_handler,
+            learning_rate=learning_rate,
+            discount_factor=discount_factor,
+            exploration_rate=exploration_rate,
+            benchmark_curve=benchmark_curve,
+            performance_stats=performance_stats
+        )
+
+        run_number = self._get_run_number()
+        # Execute the strategy
+        for e in range(epochs):
+            plot_path, stat_path, desc_path = self._get_info_paths(prefix=f"Train_{e}")
+
+            print("Starting epoch", e)
+            # Train the Q-Learning model
+            alpha_model.initialize(e)
+            alpha_model.set_eval_mode(False)
+            results = self._execute_strategy(
+                alpha_model,
+                risk_model,
+                signals,
+                rebalance_freq,
+                plot_path,
+                stat_path,
+                desc_path
+            )
+            print("End epoch", e)
+            print("Profit factor and returns", results['ProfitFactor'], results['TotalReturns'])
+            self.get_rewards_by_epoch(performance_stats)
+
+            plot_path, stat_path, desc_path = self._get_info_paths(prefix=f"Eval_{e}")
+            # Evalute in-sample performance
+            self.show_plot = False
+            self.run_benchmark = True
+            alpha_model.set_eval_mode(True)
+            results = self._execute_strategy(
+                alpha_model,
+                risk_model,
+                signals,
+                rebalance_freq,
+                plot_path,
+                stat_path,
+                desc_path
+            )
+            print(f"-------[IN SAMPLE RESULT]-------Epoch {e}/{epochs}-------")
+            print(results)
+            performance_stats.to_csv("performance_stats_"+ run_number +".csv")
+            print("--------------------------------")
+        self.plot_rewards_by_epoch(performance_stats)
+
+
+    def execute_custom_cma(self, short_window=10, long_window=30, rebalance_freq="end_of_month", risk_model=None):
         # Custom cross moving average, which addresses ratios of prices moving averages
         plot_path, stat_path, desc_path = self._get_info_paths()
         wma = EMASignal(self.start_dt, self.strategy_universe, lookbacks=[short_window, long_window])
@@ -156,7 +310,7 @@ class StrategyRunner:
             desc_path
         )
     
-    def execute_kama(self, fast_period=2, slow_period=30, er_period=10, kama_period=60, rebalance_freq="end_of_month", risk_model=None):
+    def execute_kama(self, fast_period=2, slow_period=30, er_period=10, kama_period=365, rebalance_freq="end_of_month", risk_model=None):
         plot_path, stat_path, desc_path = self._get_info_paths()
         kama = kama = KaufmanAdaptiveMASignal(self.start_dt, self.strategy_universe, lookbacks=[kama_period], fast_period=fast_period, slow_period=slow_period, er_period=er_period)
         current_price = CurrentPriceSignal(self.start_dt, self.strategy_universe, lookbacks=[0,1,2])
@@ -202,6 +356,25 @@ class StrategyRunner:
             stat_path,
             desc_path
         )
+    
+    def execute_benchmark(self, rebalance_freq="end_of_month", risk_model=None):
+        benchmark_curve = self.benchmark_spy(self.start_dt, self.end_dt)
+        title="Benchmark Long SPY"
+
+        tearsheet = TearsheetStatistics(
+            strategy_equity=None,
+            benchmark_equity=benchmark_curve,
+            title=title
+        )
+
+        bench_res = tearsheet.get_results(benchmark_curve)
+        bench_stats = tearsheet.get_primary_results(bench_res, title)
+        # Save necessary metada
+        bench_stats['rebalance_freq'] = rebalance_freq
+        bench_stats['start_dt'] = str(self.start_dt)
+        bench_stats['end_dt'] = str(self.end_dt)
+        return bench_stats
+
 
     def _execute_strategy(self, alpha_model, risk_model, signals, rebalance_freq, plot_path, stat_path, desc_path):
         backtest = BacktestTradingSession(
@@ -221,7 +394,7 @@ class StrategyRunner:
 
         benchmark_equity_curve = None
         if self.run_benchmark:
-            benchmark_equity_curve = self.benchmark_spy()
+            benchmark_equity_curve = self.benchmark_spy(self.start_dt, self.end_dt)
 
         results = self._save_statistics(
             backtest.get_equity_curve(),
@@ -243,29 +416,36 @@ class StrategyRunner:
             title = "HMM " + alpha_model.get_description()['name'] + " vs " + "SPY"
         return title
     
-    def benchmark_spy(self):
+    def benchmark_spy(self, start_dt, end_dt):
         #Construct a benchmark Alpha Model that provides
         #100% static allocation to the SPY ETF, with no rebalance
-        #Construct benchmark assets (buy & hold SPY)
+        #Construct benchmark assets (buy & hold SPY
         benchmark_assets = ['EQ:SPY']
         benchmark_universe = StaticUniverse(benchmark_assets)
         benchmark_alpha_model = FixedSignalsAlphaModel({'EQ:SPY': 1.0})
         benchmark_backtest = BacktestTradingSession(
-            self.start_dt,
-            self.end_dt,
+            start_dt,
+            end_dt,
             benchmark_universe,
             benchmark_alpha_model,
             rebalance='buy_and_hold',
             long_only=True,
-            cash_buffer_percentage=0.1,
-            data_handler=self.strategy_data_handler
+            cash_buffer_percentage=0.01,
+            data_handler=self.strategy_data_handler,
         )
         benchmark_backtest.run()
         return benchmark_backtest.get_equity_curve()
     
 
-    def _get_info_paths(self):
-        run_number = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+    def _get_run_number(self):
+        now = datetime.now()
+        run_number = now.strftime("%Y-%m-%d-%H:%M:%S") + f".{int(now.microsecond / 1000):03d}"
+        return run_number
+    
+    def _get_info_paths(self, prefix=None):
+        run_number = self._get_run_number()
+        if prefix is not None:
+            run_number = str(prefix) + "_" + run_number
         subfolder_path = os.path.join(self.output_folder, self.name, run_number)
         os.makedirs(subfolder_path)
         plot_path = os.path.join(subfolder_path, "plot.png")
@@ -280,17 +460,19 @@ class StrategyRunner:
             title=title
         )
 
-        if self.show_plot:
-            tearsheet.plot_results(filename=plot_path)
 
+        tearsheet.plot_results(filename=plot_path, show_plot=self.show_plot)
+
+        backtest_stats = None
         # Get backtest results
-        backtest_result_stats = tearsheet.get_results(backtest_curve)
-        backtest_stats = tearsheet.get_primary_results(backtest_result_stats, title)
+        if backtest_curve is not None:
+            backtest_result_stats = tearsheet.get_results(backtest_curve)
+            backtest_stats = tearsheet.get_primary_results(backtest_result_stats, title)
+                    # Save necessary metada
+            backtest_stats['rebalance_freq'] = rebalance_freq
+            backtest_stats['start_dt'] = str(self.start_dt)
+            backtest_stats['end_dt'] = str(self.end_dt)
 
-        # Save necessary metada
-        backtest_stats['rebalance_freq'] = rebalance_freq
-        backtest_stats['start_dt'] = str(self.start_dt)
-        backtest_stats['end_dt'] = str(self.end_dt)
 
         # Get benchmark results
         bench_stats = None

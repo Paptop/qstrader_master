@@ -30,7 +30,7 @@ class RSIBasedAlphaModel(AlphaModel):
             }
         }
 
-    def __call__(self, dt):
+    def __call__(self, dt, stats):
         """
         Generate long/short weights based on RSI thresholds.
 

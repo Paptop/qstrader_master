@@ -20,5 +20,5 @@ def train_hmm_on_data(train_data):
     hmm_model = GaussianHMM(
        n_components=3, covariance_type="full", n_iter=500, tol=1e-4, random_state=42
     ).fit(train_data)
-    print("Model Score:", hmm_model.score(train_data))
+    #print("Model Score:", hmm_model.score(train_data))
     return hmm_model

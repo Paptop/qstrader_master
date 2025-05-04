@@ -291,7 +291,7 @@ class TearsheetStatistics(Statistics):
         ax.axis([0, 10, 0, 10])
         return ax
 
-    def plot_results(self, filename=None):
+    def plot_results(self, filename=None, show_plot=False):
         """
         Plot the Tearsheet
 
@@ -356,4 +356,8 @@ class TearsheetStatistics(Statistics):
         # Plot the figure
         if settings.PRINT_EVENTS:
             print('Plotting the tearsheet...')
-        plt.show()
+
+        if show_plot:
+            plt.show()
+
+        plt.close(fig)

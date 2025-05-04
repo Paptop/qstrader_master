@@ -116,8 +116,8 @@ def primary_logic():
     data_loader = SimpleDataLoader()
 
     # Out of sample HMM training
-    #start_hmm_dt = pd.Timestamp('1995-01-01 14:30:00', tz=pytz.UTC)
-    #end_hmm_dt = pd.Timestamp('2015-01-01 00:00:00', tz=pytz.UTC)
+    start_hmm_dt = pd.Timestamp('1995-01-01 14:30:00', tz=pytz.UTC)
+    end_hmm_dt = pd.Timestamp('2015-01-01 00:00:00', tz=pytz.UTC)
     start_dt = pd.Timestamp('2015-01-01 14:30:00', tz=pytz.UTC)
     end_dt = pd.Timestamp('2025-02-28 23:59:00', tz=pytz.UTC)
     #burn_in_dt = pd.Timestamp('2004-11-22 14:30:00', tz=pytz.UTC)
@@ -134,11 +134,10 @@ def primary_logic():
     strategy_data_source = CSVDailyBarDataSource(csv_dir, Equity, csv_symbols=strategy_symbols)
     strategy_data_handler = BacktestDataHandler(strategy_universe, data_sources=[strategy_data_source])
 
-    short_window = 7
-    long_window = 8
+    short = 38
+    long = 39
     rebalance_freq = "end_of_month"
-    sma = SMASignal(start_dt, strategy_universe, lookbacks=[long_window, short_window])
-    signals = SignalsCollection({'sma': sma}, strategy_data_handler) 
+
     # Construct the transaction cost modelling - fees/slippage
     # 0.1% transaction fee
     # 0.5% tax on each transaction
@@ -146,21 +145,30 @@ def primary_logic():
 
     rsi_period = 13
     kama_period = 365
-    #sma = SMASignal(start_dt, strategy_universe, lookbacks=[short, long])
-    #wma = WMASignal(start_dt, strategy_universe, lookbacks=[short, long])
-    #ema = EMASignal(start_dt, strategy_universe, lookbacks=[short, long])
-    #rsi = RSISignal(start_dt, strategy_universe, lookbacks=[rsi_period])
-    #current_price = CurrentPriceSignal(start_dt, strategy_universe, lookbacks=[0,1,2])
-    #kama = KaufmanAdaptiveMASignal(start_dt, strategy_universe, lookbacks=[kama_period], fast_period=38, slow_period=39, er_period=100)
+    sma = SMASignal(start_dt, strategy_universe, lookbacks=[short, long])
+    wma = WMASignal(start_dt, strategy_universe, lookbacks=[short, long])
+    ema = EMASignal(start_dt, strategy_universe, lookbacks=[short, long])
+    rsi = RSISignal(start_dt, strategy_universe, lookbacks=[rsi_period])
+    current_price = CurrentPriceSignal(start_dt, strategy_universe, lookbacks=[0,1,2])
+    kama = KaufmanAdaptiveMASignal(start_dt, strategy_universe, lookbacks=[kama_period], fast_period=38, slow_period=39, er_period=100)
+    signals = SignalsCollection({'sma': sma, 'cur_price': current_price, 'ema': ema}, strategy_data_handler) 
 
     
-    # strategy_cross_moving_average_alpha_model = CrossMovingAverage(
-    #     signals,
-    #     strategy_universe,
-    #     strategy_data_handler,
-    #     long,
-    #     short
-    # )
+    strategy_simple_cross_moving_average_alpha_model = SimpleCrossMovingAverage(
+         signals,
+         strategy_universe,
+         strategy_data_handler,
+         long,
+         short
+    )
+
+    strategy_custom_cross_moving_average_alpha_model = CrossCustomMovingAverage(
+         signals,
+         strategy_universe,
+         strategy_data_handler,
+         long,
+         short
+    )
 
     # strategy_cross_wmoving_average_alpha_model = CrossWMovingAverage(
     #     signals,
@@ -197,39 +205,55 @@ def primary_logic():
     #     kama_period,
     #     prices_for_kama
     # )
+    merged_data = data_loader.get_data_frame(start_hmm_dt, end_dt)
 
+    params = {
+        "smooth": False,
+        "easing": False,
+        "lag": False,
+        "current_day_only": True,
+        "random": False,
+        "smooth_days": 10,  # Default 19
+        "lag_in_days": 0,  # Default 0
+        "window_size": 365  # Default 365
+    }
+    strategy_risk_model = MultiRiskHMMFilter(
+        universe=strategy_universe,
+        data=merged_data,
+        features=
+        {
+            'Adj_Close_SPY_change': { 'w': 1.0, 'sort_by_returns': True, 'flip_values': False },
+            #'Volume_SPY_change':  { 'w': 0.1, 'sort_by_returns': True, 'flip_values': True },
+            #'Adj_Close_AAPL_change':  { 'w': 1.0, 'sort_by_returns': True }
+            #'Volume_AAPL_change':  { 'w': 1.0, 'sort_by_returns': False }
+            'Adj_Close_VIX_change':  { 'w': 1.0, 'sort_by_returns': False, 'flip_values': False },
+            #'10Y_Treasury':  { 'w': 0.01, 'sort_by_returns': True, 'flip_values': False },
+            #'2Y_Treasury':  { 'w': 0.01, 'sort_by_returns': True, 'flip_values': False },
+            #'CPI': { 'w': 0.5, 'sort_by_returns': False, 'flip_values': True }
+        },
+        params=params,
+        start_hmm_dt=start_hmm_dt,
+        end_hmm_dt=end_hmm_dt
+    )
+
+    strategy_alpha_model = strategy_custom_cross_moving_average_alpha_model
     strategy_factory = StrategyFactory(signals, strategy_universe, strategy_data_handler)
     strategy_backtest = BacktestTradingSession(
         start_dt,
         end_dt,
         universe=strategy_universe,
-        alpha_model= strategy_factory.create_strategy(
-            strategy_type="simple_cross_moving_average",
-            long=long_window,
-            short=short_window
-        ),
-        #risk_model=strategy_risk_model,
+        alpha_model= strategy_alpha_model,
+        risk_model=strategy_risk_model,
         signals=signals,
-        rebalance='end_of_month',
+        rebalance='weekly',
         long_only=True,
         cash_buffer_percentage=0.01,
         data_handler=strategy_data_handler,
         #burn_in_dt=burn_in_dt,
-        rebalance_weekday='FRI',
+        rebalance_weekday='FRI'
         #fee_model=fee_model_monthly
     )
     strategy_backtest.run()
-
-    tearsheet = TearsheetStatistics(
-        strategy_equity=strategy_backtest.get_equity_curve(),
-        #benchmark_equity=benchmark_backtest.get_equity_curve(),
-        title='Cross Simple Moving Average vs SPY ETF'
-    )
-
-    # Dump results
-    tearsheet.plot_results(filename=plot_path)
-    results = tearsheet.get_results(strategy_backtest.get_equity_curve())
-
 
     #strategy_cross_wmoving_average_alpha_model
 
@@ -237,38 +261,6 @@ def primary_logic():
     #risk_manager = ExampleRiskManager()
     # Use regime detection HMM risk manager
     #plot_in_sample_hidden_states(hmm_model, train_data, rets)
-
-    # merged_data = data_loader.get_data_frame(start_hmm_dt, end_dt)
-
-    # params = {
-    #     "smooth": False,
-    #     "easing": False,
-    #     "lag": False,
-    #     "current_day_only": True,
-    #     "random": False,
-    #     "smooth_days": 10,  # Default 19
-    #     "lag_in_days": 0,  # Default 0
-    #     "window_size": 365  # Default 365
-    # }
-    # strategy_risk_model = MultiRiskHMMFilter(
-    #     universe=strategy_universe,
-    #     alpha_model=strategy_alpha_model,
-    #     data=merged_data,
-    #     features=
-    #     {
-    #         'Adj_Close_SPY_change': { 'w': 1.0, 'sort_by_returns': True, 'flip_values': False },
-    #         #'Volume_SPY_change':  { 'w': 0.1, 'sort_by_returns': True, 'flip_values': True },
-    #         #'Adj_Close_AAPL_change':  { 'w': 1.0, 'sort_by_returns': True }
-    #         #'Volume_AAPL_change':  { 'w': 1.0, 'sort_by_returns': False }
-    #         'Adj_Close_VIX_change':  { 'w': 1.0, 'sort_by_returns': False, 'flip_values': False },
-    #         #'10Y_Treasury':  { 'w': 0.01, 'sort_by_returns': True, 'flip_values': False },
-    #         #'2Y_Treasury':  { 'w': 0.01, 'sort_by_returns': True, 'flip_values': False },
-    #         #'CPI': { 'w': 0.5, 'sort_by_returns': False, 'flip_values': True }
-    #     },
-    #     params=params,
-    #     start_hmm_dt=start_hmm_dt,
-    #     end_hmm_dt=end_hmm_dt
-    # )
 
     # Construct the transaction cost modelling - fees/slippage
     # 0.1% transaction fee
@@ -283,22 +275,22 @@ def primary_logic():
     # Construct a benchmark Alpha Model that provides
     # 100% static allocation to the SPY ETF, with no rebalance
     # Construct benchmark assets (buy & hold SPY)
-    # benchmark_assets = ['EQ:SPY']
-    # benchmark_universe = StaticUniverse(benchmark_assets)
-    # benchmark_alpha_model = FixedSignalsAlphaModel({'EQ:SPY': 1.0})
+    benchmark_assets = ['EQ:SPY']
+    benchmark_universe = StaticUniverse(benchmark_assets)
+    benchmark_alpha_model = FixedSignalsAlphaModel({'EQ:SPY': 1.0})
 
-    # benchmark_backtest = BacktestTradingSession(
-    #     start_dt,
-    #     end_dt,
-    #     benchmark_universe,
-    #     benchmark_alpha_model,
-    #     rebalance='buy_and_hold',
-    #     long_only=True,
-    #     cash_buffer_percentage=0.1,
-    #     data_handler=strategy_data_handler,
-    #     fee_model=fee_model_monthly
-    # )
-    # benchmark_backtest.run()
+    benchmark_backtest = BacktestTradingSession(
+        start_dt,
+        end_dt,
+        benchmark_universe,
+        benchmark_alpha_model,
+        rebalance='buy_and_hold',
+        long_only=True,
+        cash_buffer_percentage=0.1,
+        data_handler=strategy_data_handler,
+        #fee_model=fee_model_monthly
+    )
+    benchmark_backtest.run()
 
     #sp500 = merged_data[['Adj_Close_SPY', 'pregime_label']] #strategy_data_source.get_assets_historical_closes(end_hmm_dt, end_dt, ['EQ:SPY'])
     #sp500.index = sp500.index.date
@@ -307,7 +299,7 @@ def primary_logic():
     # Performance Output
     tearsheet = TearsheetStatistics(
         strategy_equity=strategy_backtest.get_equity_curve(),
-        #benchmark_equity=benchmark_backtest.get_equity_curve(),
+        benchmark_equity=benchmark_backtest.get_equity_curve(),
         title='Cross Simple Moving Average vs SPY ETF'
     )
 

@@ -182,7 +182,7 @@ class MultiRiskHMMFilter(RiskModel):
         regime, mappings = self._determine_current_regime(dt)
 
         regimeName = mappings[regime]
-        print(mappings)
+        #print(mappings)
         #print(regime)
 
         if self.prev_regime is None:
@@ -211,7 +211,7 @@ class MultiRiskHMMFilter(RiskModel):
         if bullSwitch and not self.isInvested: #and:
             weights[assets[0]] = 1.0
             weights[assets[1]] = 0.0
-            print(dt, "Risk model: Adjusting to regime 0")
+            #print(dt, "Risk model: Adjusting to regime 0")
             self.isInvested = True
             #self.train_model(start_hmm_dt, dt)
 
@@ -222,7 +222,7 @@ class MultiRiskHMMFilter(RiskModel):
             weights[assets[0]] = 0.0
             weights[assets[1]] = 1.0
             self.isInvested = False
-            print(dt, "Risk model: Adjusting to regime 1")
+            #print(dt, "Risk model: Adjusting to regime 1")
             #self.train_model(start_hmm_dt, dt)
         
         self.prev_regime = regime

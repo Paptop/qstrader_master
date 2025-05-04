@@ -35,7 +35,7 @@ def create_profit_factor(returns):
     if abs(negative_returns) > 0:
         profit_factor = positive_returns / abs(negative_returns)
     else:
-        profit_factor = float('inf')  # No losses = infinite profit factor
+        profit_factor = 1.0 # No losses = infinite profit factor
 
     return profit_factor
 

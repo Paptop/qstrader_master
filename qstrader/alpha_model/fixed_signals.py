@@ -26,7 +26,7 @@ class FixedSignalsAlphaModel(AlphaModel):
         self.universe = universe
         self.data_handler = data_handler
 
-    def __call__(self, dt):
+    def __call__(self, dt, stats):
         """
         Produce the dictionary of fixed scalar signals for
         each of the Asset instances within the Universe.

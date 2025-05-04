@@ -20,14 +20,14 @@ class CrossWMovingAverage(AlphaModel):
 
     def get_description(self):
         return {
-            "name": "SimpleCrossMovingAverage",
+            "name": "WeightedCrossMovingAverage",
             "description": "Simple cross moving average strategy",
             "parameters": {
                 "short": self.short,
                 "long": self.long
             }
         }
-    def __call__(self, dt):
+    def __call__(self, dt, stats):
         """
         Produce the dictionary of fixed scalar signals for
         each of the Asset instances within the Universe.

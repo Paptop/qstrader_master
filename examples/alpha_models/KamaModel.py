@@ -27,7 +27,7 @@ class KamaModel(AlphaModel):
                 "period": self.period
             }
         }
-    def __call__(self, dt):
+    def __call__(self, dt, stats):
         """
         Produce the dictionary of fixed scalar signals for
         each of the Asset instances within the Universe.
@@ -60,13 +60,13 @@ class KamaModel(AlphaModel):
             self.weights[assets[0]] = 1.0
             self.weights[assets[1]] = 0.0
             self.isSelfInvested = True
-            print('Long position')
+            #print('Long position')
         else:
         # Price is below KAMA => Flat or short. Let's do flat:
             self.weights[assets[0]] = 0.0
             self.weights[assets[1]] = 1.0
             self.isSelfInvested = False
-            print('Short position')
+            #print('Short position')
 
         return self.weights
     
